@@ -91,15 +91,16 @@ def generate_email_candidates(first_name, last_name, domain):
 
 def verify_email_abstractapi(email):
     """
-    Verify email using AbstractAPI Email Validation API
+    Verify email using AbstractAPI Email Verification & Validation API
     Returns: 'verified', 'likely' (catch-all), or 'invalid'
     """
     api_key = os.getenv('ABSTRACT_API_KEY')
 
     if not api_key:
-        raise ValueError("ABSTRACT_API_KEY environment variable is required")
+        raise ValueError("ABSTRACT_API_KEY environment variable is required. Get it from https://www.abstractapi.com/api/email-verification-validation-api")
 
     try:
+        # Use the Email Verification & Validation API endpoint
         api_url = f"https://emailvalidation.abstractapi.com/v1/?api_key={api_key}&email={email}"
 
         response = requests.get(api_url, timeout=10)
@@ -107,10 +108,16 @@ def verify_email_abstractapi(email):
         if response.status_code == 200:
             data = response.json()
 
-            # Check if email is deliverable
-            if data.get('is_deliverable', False):
-                # Check if it's a catch-all domain
-                if data.get('is_catch_all_email', False):
+            # Debug: Print the full response to understand the structure
+            print(f"AbstractAPI response for {email}: {data}")
+
+            # Check if email is deliverable based on the API response
+            # The API returns 'deliverability' field with values like 'DELIVERABLE', 'UNDELIVERABLE', 'RISKY', 'UNKNOWN'
+            deliverability = data.get('deliverability', 'UNDELIVERABLE')
+            is_catch_all = data.get('is_catch_all_email', False)
+
+            if deliverability in ['DELIVERABLE']:
+                if is_catch_all:
                     return 'likely'
                 else:
                     return 'verified'
