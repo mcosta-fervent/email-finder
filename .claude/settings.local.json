@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python app.py)",
+      "Bash(where python *)",
+      "Bash(C:\\\\Users\\\\Dell\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe *)",
+      "Bash(where python3 *)",
+      "Bash(C:\\\\Users\\\\Dell\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python3.exe *)",
+      "Bash(dir \"C:\\\\Program Files\\\\Python*\" /B)",
+      "Bash(winget *)",
+      "Bash(pip install *)",
+      "Bash(python *)"
+    ]
+  }
+}
