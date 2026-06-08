@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Email Finder Backend
-Finds and verifies professional email addresses using domain resolution and AbstractAPI email validation
+Finds and verifies professional email addresses using domain resolution and DNS-based email validation
+No external API keys required - works with DNS checks only
 """
 
 import os
@@ -10,7 +11,6 @@ import dns.resolver
 import time
 from flask import Flask, request, jsonify, render_template
 from urllib.parse import urlparse
-import requests
 from bs4 import BeautifulSoup
 import tldextract
 
@@ -89,46 +89,45 @@ def generate_email_candidates(first_name, last_name, domain):
 
     return list(set(patterns))  # Remove duplicates
 
-def verify_email_abstractapi(email):
+def verify_email_dns(email):
     """
-    Verify email using AbstractAPI Email Verification & Validation API
-    Returns: 'verified', 'likely' (catch-all), or 'invalid'
+    Verify email using DNS checks (no API key or SMTP required)
+    Returns: 'verified', 'likely' (if domain has MX records), or 'invalid'
+
+    This method checks:
+    1. Email format validity
+    2. Domain exists
+    3. Domain has MX records (mail servers)
+
+    Limitations: Cannot detect catch-all emails without SMTP
     """
-    api_key = os.getenv('ABSTRACT_API_KEY')
-
-    if not api_key:
-        raise ValueError("ABSTRACT_API_KEY environment variable is required. Get it from https://www.abstractapi.com/api/email-verification-validation-api")
-
     try:
-        # Use the Email Verification & Validation API endpoint
-        api_url = f"https://emailvalidation.abstractapi.com/v1/?api_key={api_key}&email={email}"
+        # Step 1: Validate email format
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+            return 'invalid'
 
-        response = requests.get(api_url, timeout=10)
+        # Step 2: Extract domain
+        domain = email.split('@')[1]
 
-        if response.status_code == 200:
-            data = response.json()
+        # Step 3: Check if domain has MX records
+        try:
+            # Query MX records
+            mx_records = dns.resolver.resolve(domain, 'MX')
+            mx_hosts = [str(record.exchange) for record in mx_records]
 
-            # Debug: Print the full response to understand the structure
-            print(f"AbstractAPI response for {email}: {data}")
-
-            # Check if email is deliverable based on the API response
-            # The API returns 'deliverability' field with values like 'DELIVERABLE', 'UNDELIVERABLE', 'RISKY', 'UNKNOWN'
-            deliverability = data.get('deliverability', 'UNDELIVERABLE')
-            is_catch_all = data.get('is_catch_all_email', False)
-
-            if deliverability in ['DELIVERABLE']:
-                if is_catch_all:
-                    return 'likely'
-                else:
-                    return 'verified'
+            if mx_hosts:
+                # Domain accepts email, but we can't confirm specific address
+                # without SMTP or API (which Railway blocks)
+                return 'likely'
             else:
                 return 'invalid'
-        else:
-            print(f"AbstractAPI error: {response.status_code} - {response.text}")
+
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+            # Domain doesn't exist or has no MX records
             return 'invalid'
 
     except Exception as e:
-        print(f"AbstractAPI verification error for {email}: {e}")
+        print(f"DNS verification error for {email}: {e}")
         return 'invalid'
 
 @app.route('/')
@@ -169,7 +168,7 @@ def find_email():
         best_pattern = None
 
         for email in candidates:
-            status = verify_email_abstractapi(email)
+            status = verify_email_dns(email)
             results.append({
                 'email': email,
                 'status': status
