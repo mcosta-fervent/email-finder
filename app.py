@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
 Email Finder Backend
-Finds and verifies professional email addresses using domain resolution and SMTP verification
+Finds and verifies professional email addresses using domain resolution and AbstractAPI email validation
 """
 
 import os
 import re
-import socket
-import smtplib
 import dns.resolver
 import time
 from flask import Flask, request, jsonify, render_template
@@ -91,53 +89,39 @@ def generate_email_candidates(first_name, last_name, domain):
 
     return list(set(patterns))  # Remove duplicates
 
-def verify_email_smtp(email, timeout=3):
+def verify_email_abstractapi(email):
     """
-    Verify email via SMTP without sending mail
+    Verify email using AbstractAPI Email Validation API
     Returns: 'verified', 'likely' (catch-all), or 'invalid'
     """
-    domain = email.split('@')[1]
+    api_key = os.getenv('ABSTRACT_API_KEY')
+
+    if not api_key:
+        raise ValueError("ABSTRACT_API_KEY environment variable is required")
 
     try:
-        # Get MX records
-        mx_records = dns.resolver.resolve(domain, 'MX')
-        mx_hosts = sorted([str(record.exchange) for record in mx_records], key=lambda x: x.lower())
+        api_url = f"https://emailvalidation.abstractapi.com/v1/?api_key={api_key}&email={email}"
 
-        if not mx_hosts:
+        response = requests.get(api_url, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            # Check if email is deliverable
+            if data.get('is_deliverable', False):
+                # Check if it's a catch-all domain
+                if data.get('is_catch_all_email', False):
+                    return 'likely'
+                else:
+                    return 'verified'
+            else:
+                return 'invalid'
+        else:
+            print(f"AbstractAPI error: {response.status_code} - {response.text}")
             return 'invalid'
 
-        # Try each MX server
-        for mx_host in mx_hosts:
-            try:
-                # Connect to SMTP server
-                with smtplib.SMTP(timeout=timeout) as server:
-                    server.set_debuglevel(0)
-                    server.connect(mx_host, 25)
-
-                    # SMTP conversation
-                    server.helo(server.local_hostname)
-                    server.mail('test@example.com')
-
-                    # Check if address is accepted
-                    code, _ = server.rcpt(email)
-
-                    if code == 250:
-                        return 'verified'
-                    elif code == 251 or code == 252:
-                        # These might indicate catch-all
-                        return 'likely'
-                    else:
-                        return 'invalid'
-
-            except (smtplib.SMTPConnectError, smtplib.SMTPException, socket.timeout, socket.gaierror) as e:
-                continue
-
-        return 'invalid'
-
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers, dns.resolver.Timeout) as e:
-        return 'invalid'
     except Exception as e:
-        print(f"SMTP verification error for {email}: {e}")
+        print(f"AbstractAPI verification error for {email}: {e}")
         return 'invalid'
 
 @app.route('/')
@@ -178,7 +162,7 @@ def find_email():
         best_pattern = None
 
         for email in candidates:
-            status = verify_email_smtp(email)
+            status = verify_email_abstractapi(email)
             results.append({
                 'email': email,
                 'status': status

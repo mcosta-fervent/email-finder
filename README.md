@@ -5,7 +5,7 @@ A local web app for finding and verifying professional email addresses without a
 ## Features
 
 - ✅ Find professional email addresses using common patterns
-- ✅ Verify emails via SMTP without sending actual emails
+- ✅ Verify emails via AbstractAPI Email Validation API
 - 🔍 Resolve company domains from web searches
 - 📊 Show verification status (Verified, Likely, Not Found)
 - 🎯 Display email patterns and resolved domains
@@ -63,7 +63,12 @@ The app will be available at: [http://localhost:5000](http://localhost:5000)
    - Railway will automatically detect the Python app and deploy it
    - Set environment variables if needed (none required for this app)
 
-6. **Access your deployed app**:
+6. **Set environment variables**:
+   - Go to Railway project settings
+   - Add `ABSTRACT_API_KEY` with your key from [AbstractAPI](https://www.abstractapi.com/api/email-validation)
+   - Free tier provides 100 validations/month
+
+7. **Access your deployed app**:
    - After deployment completes, Railway will provide you with a live URL
    - Your app will be available at `https://your-app-name.up.railway.app`
 
@@ -87,17 +92,15 @@ The app will be available at: [http://localhost:5000](http://localhost:5000)
    - `flastname@domain.com`
    - `firstname_lastname@domain.com`
 
-3. **SMTP Verification**: Checks each candidate via SMTP:
-   - **✅ Verified**: Server explicitly accepts the address
-   - **🟡 Likely**: Server is catch-all (accepts everything)
-   - **❌ Not Found**: Address rejected or timed out
+3. **AbstractAPI Verification**: Checks each candidate via AbstractAPI Email Validation:
+   - **✅ Verified**: Email is deliverable and not a catch-all
+   - **🟡 Likely**: Email is deliverable but domain uses catch-all
+   - **❌ Not Found**: Email is not deliverable
 
 ## Limitations
 
-- Some companies block SMTP verification
-- Catch-all servers may give false positives
 - Web search for domain resolution may not always find the correct domain
-- SMTP checks have a 3-second timeout per email
+- AbstractAPI free tier limited to 100 validations/month
 
 ## Dependencies
 

@@ -9,7 +9,8 @@
       "Bash(dir \"C:\\\\Program Files\\\\Python*\" /B)",
       "Bash(winget *)",
       "Bash(pip install *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(git add *)"
     ]
   }
 }

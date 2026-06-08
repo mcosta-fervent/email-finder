@@ -89,6 +89,30 @@ This tells Railway to:
 - Bind to the port provided by Railway (`$PORT`)
 - Run the `app` object from `app.py`
 
+### Environment Variables
+
+**REQUIRED**: `ABSTRACT_API_KEY`
+
+This app requires the AbstractAPI key to be set:
+
+1. **Get your API key from AbstractAPI:**
+   - Go to [https://www.abstractapi.com/api/email-validation](https://www.abstractapi.com/api/email-validation)
+   - Sign up for a free account
+   - Get your API key from the dashboard
+   - Free tier provides 100 email validations per month
+
+2. **Add the API key to Railway:**
+   - Go to your Railway project dashboard
+   - Click on the "Variables" tab
+   - Click "New Variable"
+   - Enter `ABSTRACT_API_KEY` as the name
+   - Paste your AbstractAPI key as the value
+   - Click "Add"
+
+3. **Redeploy your app:**
+   - After adding the variable, Railway will automatically redeploy your app
+   - Alternatively, you can manually trigger a redeploy
+
 ### Requirements
 
 Make sure `requirements.txt` includes:
@@ -101,14 +125,33 @@ tldextract==5.1.2
 gunicorn==21.2.0
 ```
 
+**Note**: `smtplib` (Python built-in) is no longer needed as we use AbstractAPI for email validation.
+
 ## 🔧 Environment Variables
 
-This app doesn't require any environment variables, but if you need to add any:
+This app uses AbstractAPI for email validation. You need to set up the following environment variable:
 
-1. Go to your Railway project
-2. Click on "Variables" tab
-3. Add any required variables
-4. Redeploy
+### ABSTRACT_API_KEY
+
+1. **Get your API key from AbstractAPI:**
+   - Go to [https://www.abstractapi.com/api/email-validation](https://www.abstractapi.com/api/email-validation)
+   - Sign up for a free account
+   - Get your API key from the dashboard
+   - Free tier provides 100 email validations per month
+
+2. **Add the API key to Railway:**
+   - Go to your Railway project dashboard
+   - Click on the "Variables" tab
+   - Click "New Variable"
+   - Enter `ABSTRACT_API_KEY` as the name
+   - Paste your AbstractAPI key as the value
+   - Click "Add"
+
+3. **Redeploy your app:**
+   - After adding the variable, Railway will automatically redeploy your app
+   - Alternatively, you can manually trigger a redeploy
+
+The `ABSTRACT_API_KEY` is required for email validation to work.
 
 ## 💰 Pricing
 
@@ -142,6 +185,12 @@ Railway offers a free tier that's perfect for this app:
 - Enable "Auto-deploy on push"
 - Railway will redeploy on every git push
 
+### 5. Monitor API Usage
+- AbstractAPI free tier provides 100 validations/month
+- Each email candidate counts as one API call (typically 6 candidates per search)
+- Monitor your usage at [AbstractAPI Dashboard](https://www.abstractapi.com/dashboard)
+- Upgrade plan if you need more validations
+
 ## 🛠️ Troubleshooting
 
 ### Common Issues
@@ -151,10 +200,10 @@ Railway offers a free tier that's perfect for this app:
 - Make sure all dependencies are in `requirements.txt`
 - Verify `Procfile` is correct
 
-**Issue: SMTP verification not working**
-- Some companies block SMTP checks
-- This is expected behavior
-- The app handles this gracefully
+**Issue: Email validation not working**
+- Check if `ABSTRACT_API_KEY` is set correctly
+- Verify your API key is valid at AbstractAPI
+- Check Railway logs for error messages
 
 **Issue: Domain resolution failing**
 - Try different company names
@@ -187,9 +236,9 @@ To update your deployed app:
 
 ## 📈 Performance Considerations
 
-- **SMTP Timeouts**: Each email check has 3-second timeout
-- **Rate Limiting**: Add 1-second delay between checks to avoid blocking
-- **Caching**: Consider caching domain lookups for frequent searches
+- **API Limits**: AbstractAPI free tier limited to 100 validations/month
+- **Rate Limiting**: Add 1-second delay between checks to avoid rate limits
+- **Caching**: Consider caching results for frequent searches
 - **Workers**: Railway free tier uses 1 worker (sufficient for this app)
 
 ## 🚨 Important Notes
@@ -197,6 +246,6 @@ To update your deployed app:
 1. **This is a development/demo app** - Not intended for production spam
 2. **Respect privacy and terms of service** of companies you search
 3. **Railway free tier has limits** - Monitor your usage
-4. **SMTP verification may be blocked** by some companies
+4. **AbstractAPI key is required** for email validation
 
 Your Email Finder app is now ready for Railway deployment! 🎉
