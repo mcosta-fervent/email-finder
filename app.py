@@ -232,12 +232,23 @@ def find_email():
             if status in ['verified', 'likely']:
                 # If this is a high-priority pattern, select it
                 if email in pattern_priority:
-                    if not best_email or pattern_priority.index(email) < pattern_priority.index(best_email):
+                    if not best_email:
+                        best_email = email
+                        best_status = status
+                        best_pattern = email.split('@')[0]
+                    elif best_email in pattern_priority:
+                        # Both are priority patterns, prefer the one with higher priority (lower index)
+                        if pattern_priority.index(email) < pattern_priority.index(best_email):
+                            best_email = email
+                            best_status = status
+                            best_pattern = email.split('@')[0]
+                    else:
+                        # Current best is not priority, replace with priority pattern
                         best_email = email
                         best_status = status
                         best_pattern = email.split('@')[0]
                 # If no priority pattern found yet, take the first valid one
-                elif not best_email or best_pattern not in [p.split('@')[0] for p in pattern_priority]:
+                elif not best_email:
                     best_email = email
                     best_status = status
                     best_pattern = email.split('@')[0]
