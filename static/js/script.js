@@ -102,13 +102,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 candidateItem.appendChild(emailSpan);
                 candidateItem.appendChild(statusSpan);
 
-                // Add confidence percentage if available and status is likely
-                if (candidate.confidence !== null && candidate.confidence !== undefined && candidate.status === 'likely') {
-                    const confidenceSpan = document.createElement('span');
-                    confidenceSpan.className = 'candidate-confidence';
-                    confidenceSpan.textContent = ` (${candidate.confidence}% likely)`;
-                    candidateItem.appendChild(confidenceSpan);
-                }
 
                 candidatesContainer.appendChild(candidateItem);
             });

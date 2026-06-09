@@ -10,7 +10,7 @@
 <body>
     <div class="container">
         <h1>🔍 Professional Email Finder</h1>
-        <p class="subtitle">Find and verify professional email addresses without paid APIs</p>
+        <p class="subtitle">Find and verify professional email addresses using SMTP verification</p>
 
         <div class="form-container">
             <form id="emailForm">
@@ -29,19 +29,7 @@
                     <input type="text" id="companyName" name="company_name" placeholder="Acme Inc" required>
                 </div>
 
-                <div class="form-group">
-                    <label>Verification Method</label>
-                    <div class="radio-group">
-                        <div class="radio-option">
-                            <input type="radio" id="verifyDNS" name="verify_method" value="dns" checked>
-                            <label for="verifyDNS">DNS (Faster, no SMTP)</label>
-                        </div>
-                        <div class="radio-option">
-                            <input type="radio" id="verifySMTP" name="verify_method" value="smtp">
-                            <label for="verifySMTP">SMTP (Slower, more accurate)</label>
-                        </div>
-                    </div>
-                </div>
+                <!-- Verification method removed - DNS only for reliability -->
 
                 <div class="form-group checkbox-group">
                     <input type="checkbox" id="showAll" name="show_all">

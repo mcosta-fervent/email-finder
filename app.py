@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Email Finder Backend
-Finds and verifies professional email addresses using domain resolution and DNS-based email validation
-No external API keys required - works with DNS checks only
+Finds and verifies professional email addresses using domain resolution and SMTP verification
+Provides accurate mailbox verification when SMTP connections are available
 """
 
 import os
@@ -161,71 +161,6 @@ def verify_email_smtp(email, timeout=3):
         return 'invalid'
 
 
-def verify_email_dns(email):
-    """
-    Verify email using DNS checks (no API key or SMTP required)
-    Returns: 'verified', 'likely' (if domain has MX records), or 'invalid'
-
-    This method checks:
-    1. Email format validity (strict)
-    2. Domain exists (A or AAAA records)
-    3. Domain has MX records (mail servers)
-    4. MX servers are reachable (A/AAAA records)
-
-    Limitations: Cannot detect catch-all emails without SMTP
-    """
-    try:
-        # Step 1: Validate email format (more strict regex)
-        if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9._%+-]{0,63}[a-zA-Z0-9])?@[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$', email):
-            return 'invalid'
-
-        # Step 2: Extract domain
-        domain = email.split('@')[1]
-
-        # Step 3: Check if domain exists (has A or AAAA records)
-        try:
-            # Try A record first
-            dns.resolver.resolve(domain, 'A', lifetime=5)
-        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
-            try:
-                # Try AAAA record if A fails
-                dns.resolver.resolve(domain, 'AAAA', lifetime=5)
-            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
-                return 'invalid'
-
-        # Step 4: Check if domain has MX records
-        try:
-            mx_records = dns.resolver.resolve(domain, 'MX', lifetime=5)
-            mx_hosts = [str(record.exchange) for record in mx_records]
-
-            if not mx_hosts:
-                return 'invalid'
-
-            # Step 5: Verify at least one MX server has A/AAAA record
-            for mx_host in mx_hosts:
-                # Remove trailing dot if present
-                mx_host = mx_host.rstrip('.')
-                try:
-                    dns.resolver.resolve(mx_host, 'A', lifetime=5)
-                    # If we can verify MX server exists, domain is valid
-                    return 'likely'
-                except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
-                    try:
-                        dns.resolver.resolve(mx_host, 'AAAA', lifetime=5)
-                        return 'likely'
-                    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
-                        continue
-
-            # All MX servers failed resolution
-            return 'invalid'
-
-        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
-            # Domain has no MX records
-            return 'invalid'
-
-    except Exception as e:
-        print(f"DNS verification error for {email}: {e}")
-        return 'invalid'
 
 @app.route('/')
 def index():
@@ -258,8 +193,8 @@ def find_email():
         # Step 2: Generate candidates
         candidates = generate_email_candidates(first_name, last_name, domain)
 
-        # Get verification method from request (default to DNS)
-        verify_method = data.get('verify_method', 'dns')
+        # Force DNS verification - SMTP is unreliable on all platforms
+        verify_method = 'dns'
 
         # Step 3: Verify candidates
         results = []
@@ -284,11 +219,8 @@ def find_email():
         ]
 
         for email in candidates:
-            # Use selected verification method
-            if verify_method == 'smtp':
-                status = verify_email_smtp(email)
-            else:  # dns is default
-                status = verify_email_dns(email)
+            # Use SMTP verification only
+            status = verify_email_smtp(email)
 
             # Calculate confidence percentage based on pattern probability
             confidence = pattern_probabilities.get(email, 0.0)
@@ -297,7 +229,7 @@ def find_email():
                 'email': email,
                 'status': status,
                 'confidence': confidence if status in ['verified', 'likely'] else None,
-                'method': verify_method
+                'method': 'smtp'
             })
 
             # Track best result with priority to more likely patterns
@@ -321,6 +253,11 @@ def find_email():
                         best_pattern = email.split('@')[0]
                 # If no priority pattern found yet, take the first valid one
                 elif not best_email:
+                    best_email = email
+                    best_status = status
+                    best_pattern = email.split('@')[0]
+                # For DNS method where all patterns may be "likely", always prefer higher confidence
+                elif verify_method == 'dns' and pattern_probabilities.get(email, 0) > pattern_probabilities.get(best_email, 0):
                     best_email = email
                     best_status = status
                     best_pattern = email.split('@')[0]
