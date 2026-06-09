@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const lastName = document.getElementById('lastName').value.trim();
             const companyName = document.getElementById('companyName').value.trim();
             const showAll = document.getElementById('showAll').checked;
-            const verifyMethod = document.querySelector('input[name="verify_method"]:checked').value;
 
             // Send request to backend
             const response = await fetch('/find_email', {
@@ -35,8 +34,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     first_name: firstName,
                     last_name: lastName,
                     company_name: companyName,
-                    show_all: showAll,
-                    verify_method: verifyMethod
+                    show_all: showAll
                 })
             });
 

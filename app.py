@@ -228,8 +228,7 @@ def find_email():
             results.append({
                 'email': email,
                 'status': status,
-                'confidence': confidence if status in ['verified', 'likely'] else None,
-                'method': 'smtp'
+                'confidence': confidence if status in ['verified', 'likely'] else None
             })
 
             # Track best result with priority to more likely patterns
@@ -253,11 +252,6 @@ def find_email():
                         best_pattern = email.split('@')[0]
                 # If no priority pattern found yet, take the first valid one
                 elif not best_email:
-                    best_email = email
-                    best_status = status
-                    best_pattern = email.split('@')[0]
-                # For DNS method where all patterns may be "likely", always prefer higher confidence
-                elif verify_method == 'dns' and pattern_probabilities.get(email, 0) > pattern_probabilities.get(best_email, 0):
                     best_email = email
                     best_status = status
                     best_pattern = email.split('@')[0]
