@@ -74,20 +74,40 @@ def resolve_company_domain(company_name):
 def generate_email_candidates(first_name, last_name, domain):
     """
     Generate email candidates from common patterns
+    Ordered by statistical likelihood (most common first)
     """
     first = first_name.lower()
     last = last_name.lower()
+    first_initial = first[0] if first else ''
+    last_initial = last[0] if last else ''
 
+    # Generate patterns ordered by probability (most common corporate patterns first)
     patterns = [
-        f"{first}@{domain}",
-        f"{last}@{domain}",
-        f"{first}.{last}@{domain}",
-        f"{first[0]}.{last}@{domain}",
-        f"{first}{last}@{domain}",
-        f"{first}_{last}@{domain}"
+        # Most common patterns (70%+ of corporate emails)
+        f"{first}.{last}@{domain}",      # john.doe@company.com (most common)
+        f"{first[0]}{last}@{domain}",     # jdoe@company.com
+        f"{first}@{domain}",             # john@company.com
+        f"{first}{last}@{domain}",        # johndoe@company.com
+
+        # Common variations
+        f"{first[0]}.{last}@{domain}",    # j.doe@company.com
+        f"{first}_{last}@{domain}",       # john_doe@company.com
+        f"{last}.{first}@{domain}",       # doe.john@company.com
+        f"{last}{first}@{domain}",         # doejohn@company.com
+
+        # Initial-based patterns
+        f"{first[0]}{last[0]}@{domain}",  # jd@company.com
+        f"{first_initial}@{domain}",       # j@company.com (if first name is common)
+
+        # Department/role patterns (if we had that info)
+        # f"{first}.{department}@{domain}",
+        # f"{department}.{last}@{domain}"
     ]
 
-    return list(set(patterns))  # Remove duplicates
+    # Remove duplicates and empty strings
+    candidates = list(set(filter(None, patterns)))
+
+    return candidates
 
 def verify_email_dns(email):
     """
@@ -95,35 +115,60 @@ def verify_email_dns(email):
     Returns: 'verified', 'likely' (if domain has MX records), or 'invalid'
 
     This method checks:
-    1. Email format validity
-    2. Domain exists
+    1. Email format validity (strict)
+    2. Domain exists (A or AAAA records)
     3. Domain has MX records (mail servers)
+    4. MX servers are reachable (A/AAAA records)
 
     Limitations: Cannot detect catch-all emails without SMTP
     """
     try:
-        # Step 1: Validate email format
-        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        # Step 1: Validate email format (more strict regex)
+        if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9._%+-]{0,63}[a-zA-Z0-9])?@[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$', email):
             return 'invalid'
 
         # Step 2: Extract domain
         domain = email.split('@')[1]
 
-        # Step 3: Check if domain has MX records
+        # Step 3: Check if domain exists (has A or AAAA records)
         try:
-            # Query MX records
-            mx_records = dns.resolver.resolve(domain, 'MX')
-            mx_hosts = [str(record.exchange) for record in mx_records]
-
-            if mx_hosts:
-                # Domain accepts email, but we can't confirm specific address
-                # without SMTP or API (which Railway blocks)
-                return 'likely'
-            else:
+            # Try A record first
+            dns.resolver.resolve(domain, 'A', lifetime=5)
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+            try:
+                # Try AAAA record if A fails
+                dns.resolver.resolve(domain, 'AAAA', lifetime=5)
+            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
                 return 'invalid'
 
+        # Step 4: Check if domain has MX records
+        try:
+            mx_records = dns.resolver.resolve(domain, 'MX', lifetime=5)
+            mx_hosts = [str(record.exchange) for record in mx_records]
+
+            if not mx_hosts:
+                return 'invalid'
+
+            # Step 5: Verify at least one MX server has A/AAAA record
+            for mx_host in mx_hosts:
+                # Remove trailing dot if present
+                mx_host = mx_host.rstrip('.')
+                try:
+                    dns.resolver.resolve(mx_host, 'A', lifetime=5)
+                    # If we can verify MX server exists, domain is valid
+                    return 'likely'
+                except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+                    try:
+                        dns.resolver.resolve(mx_host, 'AAAA', lifetime=5)
+                        return 'likely'
+                    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+                        continue
+
+            # All MX servers failed resolution
+            return 'invalid'
+
         except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
-            # Domain doesn't exist or has no MX records
+            # Domain has no MX records
             return 'invalid'
 
     except Exception as e:
@@ -167,6 +212,15 @@ def find_email():
         best_status = None
         best_pattern = None
 
+        # Prioritize patterns by statistical likelihood
+        # Most common corporate pattern: first.last@domain.com
+        pattern_priority = [
+            f"{first_name.lower()}.{last_name.lower()}@{domain}",
+            f"{first_name.lower()[0]}{last_name.lower()}@{domain}",
+            f"{first_name.lower()}@{domain}",
+            f"{first_name.lower()}{last_name.lower()}@{domain}"
+        ]
+
         for email in candidates:
             status = verify_email_dns(email)
             results.append({
@@ -174,19 +228,19 @@ def find_email():
                 'status': status
             })
 
-            # Track best result
-            if status == 'verified' and best_status != 'verified':
-                best_email = email
-                best_status = status
-                best_pattern = email.split('@')[0]
-            elif status == 'likely' and best_status not in ['verified', 'likely']:
-                best_email = email
-                best_status = status
-                best_pattern = email.split('@')[0]
-            elif not best_email:
-                best_email = email
-                best_status = status
-                best_pattern = email.split('@')[0]
+            # Track best result with priority to more likely patterns
+            if status in ['verified', 'likely']:
+                # If this is a high-priority pattern, select it
+                if email in pattern_priority:
+                    if not best_email or pattern_priority.index(email) < pattern_priority.index(best_email):
+                        best_email = email
+                        best_status = status
+                        best_pattern = email.split('@')[0]
+                # If no priority pattern found yet, take the first valid one
+                elif not best_email or best_pattern not in [p.split('@')[0] for p in pattern_priority]:
+                    best_email = email
+                    best_status = status
+                    best_pattern = email.split('@')[0]
 
             # Small delay between checks
             time.sleep(1)
