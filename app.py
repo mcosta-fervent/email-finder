@@ -7,6 +7,8 @@ No external API keys required - works with DNS checks only
 
 import os
 import re
+import socket
+import smtplib
 import dns.resolver
 import time
 from flask import Flask, request, jsonify, render_template
@@ -109,6 +111,56 @@ def generate_email_candidates(first_name, last_name, domain):
 
     return candidates
 
+def verify_email_smtp(email, timeout=3):
+    """
+    Verify email via SMTP without sending mail
+    Returns: 'verified', 'likely' (catch-all), or 'invalid'
+    """
+    domain = email.split('@')[1]
+
+    try:
+        # Get MX records
+        mx_records = dns.resolver.resolve(domain, 'MX')
+        mx_hosts = sorted([str(record.exchange) for record in mx_records], key=lambda x: x.lower())
+
+        if not mx_hosts:
+            return 'invalid'
+
+        # Try each MX server
+        for mx_host in mx_hosts:
+            try:
+                # Connect to SMTP server
+                with smtplib.SMTP(timeout=timeout) as server:
+                    server.set_debuglevel(0)
+                    server.connect(mx_host, 25)
+
+                    # SMTP conversation
+                    server.helo(server.local_hostname)
+                    server.mail('test@example.com')
+
+                    # Check if address is accepted
+                    code, _ = server.rcpt(email)
+
+                    if code == 250:
+                        return 'verified'
+                    elif code == 251 or code == 252:
+                        # These might indicate catch-all
+                        return 'likely'
+                    else:
+                        return 'invalid'
+
+            except (smtplib.SMTPConnectError, smtplib.SMTPException, socket.timeout, socket.gaierror) as e:
+                continue
+
+        return 'invalid'
+
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers, dns.resolver.Timeout) as e:
+        return 'invalid'
+    except Exception as e:
+        print(f"SMTP verification error for {email}: {e}")
+        return 'invalid'
+
+
 def verify_email_dns(email):
     """
     Verify email using DNS checks (no API key or SMTP required)
@@ -206,6 +258,9 @@ def find_email():
         # Step 2: Generate candidates
         candidates = generate_email_candidates(first_name, last_name, domain)
 
+        # Get verification method from request (default to DNS)
+        verify_method = data.get('verify_method', 'dns')
+
         # Step 3: Verify candidates
         results = []
         best_email = None
@@ -229,7 +284,11 @@ def find_email():
         ]
 
         for email in candidates:
-            status = verify_email_dns(email)
+            # Use selected verification method
+            if verify_method == 'smtp':
+                status = verify_email_smtp(email)
+            else:  # dns is default
+                status = verify_email_dns(email)
 
             # Calculate confidence percentage based on pattern probability
             confidence = pattern_probabilities.get(email, 0.0)
@@ -237,7 +296,8 @@ def find_email():
             results.append({
                 'email': email,
                 'status': status,
-                'confidence': confidence if status in ['verified', 'likely'] else None
+                'confidence': confidence if status in ['verified', 'likely'] else None,
+                'method': verify_method
             })
 
             # Track best result with priority to more likely patterns

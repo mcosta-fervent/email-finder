@@ -104,6 +104,21 @@ input[type="text"]:focus {
     margin-right: 10px;
 }
 
+.radio-group {
+    display: flex;
+    gap: 15px;
+    margin-top: 8px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+}
+
+.radio-option input {
+    margin-right: 8px;
+}
+
 button {
     background-color: var(--primary-color);
     color: white;
