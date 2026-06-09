@@ -39,39 +39,60 @@ def resolve_company_domain(company_name):
         except:
             pass
 
-        # Try to find company website via search
-        search_url = f"https://www.google.com/search?q={company_name}+official+website"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+        # Try common domain variations
+        variations = [
+            f"{company_name.lower().replace(' ', '')}.com",
+            f"{company_name.lower().replace(' ', '')}.net",
+            f"{company_name.lower().replace(' ', '')}.org",
+            f"{company_name.lower().replace(' ', '')}.io",
+        ]
 
-        response = requests.get(search_url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        for domain in variations:
+            try:
+                dns.resolver.resolve(domain, 'MX')
+                return domain
+            except:
+                continue
 
-        # Extract search results
-        for link in soup.find_all('a'):
-            href = link.get('href')
-            if href and href.startswith('/url?q='):
-                url = href.split('/url?q=')[1].split('&')[0]
-                domain = tldextract.extract(url).registered_domain
+        # Try to find company website via search (may be blocked)
+        try:
+            search_url = f"https://www.google.com/search?q={company_name}+official+website"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
 
-                # Skip social media and common non-official sites
-                skip_domains = ['linkedin', 'wikipedia', 'crunchbase', 'facebook', 'twitter', 'instagram', 'youtube', 'glassdoor']
-                if any(skip in domain.lower() for skip in skip_domains):
-                    continue
+            response = requests.get(search_url, headers=headers, timeout=10)
+            soup = BeautifulSoup(response.text, 'html.parser')
 
-                # Check if domain has MX records
-                try:
-                    dns.resolver.resolve(domain, 'MX')
-                    return domain
-                except:
-                    continue
+            # Extract search results
+            for link in soup.find_all('a'):
+                href = link.get('href')
+                if href and href.startswith('/url?q='):
+                    url = href.split('/url?q=')[1].split('&')[0]
+                    domain = tldextract.extract(url).registered_domain
 
-        return None
+                    # Skip social media and common non-official sites
+                    skip_domains = ['linkedin', 'wikipedia', 'crunchbase', 'facebook', 'twitter', 'instagram', 'youtube', 'glassdoor']
+                    if any(skip in domain.lower() for skip in skip_domains):
+                        continue
+
+                    # Check if domain has MX records
+                    try:
+                        dns.resolver.resolve(domain, 'MX')
+                        return domain
+                    except:
+                        continue
+        except Exception as e:
+            print(f"Google search failed (may be blocked): {e}")
+
+        # If all else fails, return the simple domain guess
+        # User can manually verify if wrong
+        return simple_domain
 
     except Exception as e:
         print(f"Error resolving domain: {e}")
-        return None
+        # Return a best guess even on error
+        return f"{company_name.lower().replace(' ', '')}.com"
 
 def generate_email_candidates(first_name, last_name, domain):
     """
@@ -187,7 +208,7 @@ def find_email():
 
         if not domain:
             return jsonify({
-                'error': f'Could not resolve domain for {company_name}'
+                'error': f'Could not automatically resolve domain for {company_name}. Try these: {company_name.lower().replace(" ", "")}.com, {company_name.lower().replace(" ", "")}.net, or check the company website'
             }), 404
 
         # Step 2: Generate candidates
